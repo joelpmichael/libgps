@@ -22,7 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-#include "gps.h"
+#include "libgps.h"
 
 #include <assert.h>
 #include <stdbool.h>
