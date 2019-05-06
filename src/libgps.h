@@ -43,6 +43,11 @@ THE SOFTWARE.
 
 #include <stdint.h>
 
+#ifdef LIBGPS_USE_TIME_H
+#include <time.h>
+#include <stdlib.h> // for atoi()
+#endif
+
 /* String sizes */
 #define GPS_TIME_STRING_SIZE (25) /**< The size of the timestamp string including the NUL terminator */
 #define GPS_TALKER_ID_SIZE   (3)  /**< The size of the talker ID string including the NUL terminator */
@@ -84,7 +89,11 @@ struct gps_tpv
     int32_t longitude;  /**< Longitude in degrees times 10e6 */
     int32_t track;      /**< Course over ground, degrees from true north times 10e3 */
     int32_t speed;      /**< Speed over ground, meters per second times 10e3 */
-    char time[GPS_TIME_STRING_SIZE];    /**< Time stamp in ISO8601 format, UTC */
+    #ifdef LIBGPS_USE_TIME_H
+        struct tm time;
+    #else
+        char time[GPS_TIME_STRING_SIZE];    /**< Time stamp in ISO8601 format, UTC */
+    #endif
     char talker_id[GPS_TALKER_ID_SIZE]; /**< Device talker ID */
 };
 
