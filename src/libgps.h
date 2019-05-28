@@ -81,7 +81,7 @@ enum gps_mode
 /**
  * @brief Time-Position-Velocity (TPV) data.
  */
-struct gps_tpv
+typedef struct gps_tpv
 {
     enum gps_mode mode; /**< NMEA fix mode */
     int32_t altitude;   /**< Altitude in meters times 10e3 */
@@ -95,7 +95,7 @@ struct gps_tpv
         char time[GPS_TIME_STRING_SIZE];    /**< Time stamp in ISO8601 format, UTC */
     #endif
     char talker_id[GPS_TALKER_ID_SIZE]; /**< Device talker ID */
-};
+} tpv_t;
 
 #ifdef __cplusplus
 extern "C" {
