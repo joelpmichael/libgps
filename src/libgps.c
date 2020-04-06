@@ -29,7 +29,7 @@ THE SOFTWARE.
 #include <stddef.h>
 #include <string.h>
 
-#define NMEA_MAX_FIELDS  (32)
+#define NMEA_MAX_FIELDS (32)
 #define SENTENCE_ID_SIZE (3)
 
 #define is_char_in_range(c, start, end) \
@@ -44,24 +44,31 @@ THE SOFTWARE.
 typedef void (*parse_function)(struct gps_tpv *, const char **);
 
 #ifdef LIBGPS_USE_TIME_H
-static const time_t NULL_TIME = 0;
+const struct tm NULL_TIME = {
+    .tm_sec = 0,
+    .tm_min = 0,
+    .tm_hour = 0,
+    .tm_mday = 1,
+    .tm_mon = 0,
+    .tm_year = 70,
+    .tm_isdst = 0,
+}; // UNIX Epoch - 1970-01-01T00:00:00
+
 #else
 static const char NULL_TIME[] = "0000-00-00T00:00:00.000Z";
 #endif
 
-static char uint8_to_hex_char(const uint8_t n)
-{
+static char uint8_to_hex_char(const uint8_t n) {
     static const char hex[] = {
         '0', '1', '2', '3', '4', '5', '6', '7',
-        '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'
-    };
+        '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 
-    if ((0 <= n) && (n <= 0x0F)) return hex[n];
+    if ((0 <= n) && (n <= 0x0F))
+        return hex[n];
     return hex[0];
 }
 
-static uint8_t hex_char_to_uint8(const char c)
-{
+static uint8_t hex_char_to_uint8(const char c) {
     if (('0' <= c) && (c <= '9'))
         return c - '0';
     else if (('A' <= c) && (c <= 'F'))
@@ -72,36 +79,33 @@ static uint8_t hex_char_to_uint8(const char c)
     return 0;
 }
 
-static uint8_t build_hex_byte(const char c0, const char c1)
-{
+static uint8_t build_hex_byte(const char c0, const char c1) {
     uint8_t val;
-    val  = (hex_char_to_uint8(c0) << 4) & 0xF0;
-    val |=  hex_char_to_uint8(c1)       & 0x0F;
+    val = (hex_char_to_uint8(c0) << 4) & 0xF0;
+    val |= hex_char_to_uint8(c1) & 0x0F;
     return val;
 }
 
-static bool match_sentence_id(const char *str, const char *id)
-{
+static bool match_sentence_id(const char *str, const char *id) {
     return strncmp(str, id, SENTENCE_ID_SIZE) == 0;
 }
 
-static int32_t parse_number(const char *str)
-{
+static int32_t parse_number(const char *str) {
     int32_t value = 0;
     int32_t factor;
     int32_t sign = 1;
     char c0 = *str++;
 
     /* Check if the string is an empty token field */
-    if (!c0) return GPS_INVALID_VALUE;
+    if (!c0)
+        return GPS_INVALID_VALUE;
 
     /* Number : -?[0-9]+(\.[0-9]{1,3}) */
 
     /* Check if the first character is a minus sign
      * Regex : -?
      */
-    if ('-' == c0)
-    {
+    if ('-' == c0) {
         sign = -1;
         c0 = *str++;
     }
@@ -109,17 +113,12 @@ static int32_t parse_number(const char *str)
     /* Store one or more decimal digits
      * Regex : [0-9]+
      */
-    if (is_digit_0_to_9(c0))
-    {
-        do
-        {
+    if (is_digit_0_to_9(c0)) {
+        do {
             value = (value * 10) + (c0 - '0');
             c0 = *str++;
-        }
-        while (is_digit_0_to_9(c0));
-    }
-    else
-    {
+        } while (is_digit_0_to_9(c0));
+    } else {
         return GPS_INVALID_VALUE;
     }
 
@@ -128,28 +127,23 @@ static int32_t parse_number(const char *str)
      * Regex : (\.[0-9]{1,3})
      */
     factor = GPS_VALUE_FACTOR;
-    if ('.' == c0)
-    {
+    if ('.' == c0) {
         c0 = *str++;
-        if (is_digit_0_to_9(c0))
-        {
+        if (is_digit_0_to_9(c0)) {
             uint_fast8_t i = 3;
 
-            do
-            {
+            do {
                 value = (value * 10) + (c0 - '0');
                 factor /= 10;
                 c0 = *str++;
-            }
-            while (is_digit_0_to_9(c0) && --i);
+            } while (is_digit_0_to_9(c0) && --i);
         }
     }
 
     return value * factor * sign;
 }
 
-static int32_t parse_angular_distance(const char *nmea, const char direction)
-{
+static int32_t parse_angular_distance(const char *nmea, const char direction) {
     int32_t angular_distance;
     int32_t minutes;
     int32_t factor;
@@ -158,7 +152,8 @@ static int32_t parse_angular_distance(const char *nmea, const char direction)
     char c0 = *nmea++;
 
     /* First check for an empty token field */
-    if (!c0) return GPS_INVALID_VALUE;
+    if (!c0)
+        return GPS_INVALID_VALUE;
 
     /* Latitude  : ([0-9]{2})([0-9]{2}\.)[0-9]{1,6}
      * Longitude : ([0-9]{3})([0-9]{2}\.)[0-9]{1,6}
@@ -172,8 +167,7 @@ static int32_t parse_angular_distance(const char *nmea, const char direction)
      * that begins with 2 degree digits. For E or W, we know we are parsing
      * longitude and that begins with 3 degree digits.
      */
-    switch (direction)
-    {
+    switch (direction) {
     case 'N':
         sign = 1;
         i = 2;
@@ -198,15 +192,11 @@ static int32_t parse_angular_distance(const char *nmea, const char direction)
      * Regex : ([0-9]{3})
      */
     angular_distance = 0;
-    while (i--)
-    {
-        if (is_digit_0_to_9(c0))
-        {
+    while (i--) {
+        if (is_digit_0_to_9(c0)) {
             angular_distance = (angular_distance * 10) + (c0 - '0');
             c0 = *nmea++;
-        }
-        else
-        {
+        } else {
             return GPS_INVALID_VALUE;
         }
     }
@@ -217,21 +207,18 @@ static int32_t parse_angular_distance(const char *nmea, const char direction)
      */
     minutes = 0;
     i = 2;
-    while (i--)
-    {
-        if (is_digit_0_to_9(c0))
-        {
+    while (i--) {
+        if (is_digit_0_to_9(c0)) {
             minutes = (minutes * 10) + (c0 - '0');
             c0 = *nmea++;
-        }
-        else
-        {
+        } else {
             return GPS_INVALID_VALUE;
         }
     }
 
     /* Check if a decimal point is the current character */
-    if (c0 != '.') return GPS_INVALID_VALUE;
+    if (c0 != '.')
+        return GPS_INVALID_VALUE;
     c0 = *nmea++;
 
     /* Store up to 6 more arc minute fraction values
@@ -239,18 +226,13 @@ static int32_t parse_angular_distance(const char *nmea, const char direction)
      */
     factor = GPS_LAT_LON_FACTOR;
     i = 6;
-    if (is_digit_0_to_9(c0))
-    {
-        do
-        {
+    if (is_digit_0_to_9(c0)) {
+        do {
             minutes = (minutes * 10) + (c0 - '0');
             factor /= 10;
             c0 = *nmea++;
-        }
-        while (is_digit_0_to_9(c0) && --i);
-    }
-    else
-    {
+        } while (is_digit_0_to_9(c0) && --i);
+    } else {
         return GPS_INVALID_VALUE;
     }
     minutes *= factor;
@@ -279,33 +261,39 @@ static void parse_time(struct tm *gps_time, const char *nmea) {
     if (is_digit_0_to_2(c0)) {
         h += (atoi(&c0)) * 10;
         c0 = *nmea++;
-    } else return;
+    } else
+        return;
     if (is_digit_0_to_9(c0)) {
         h += (atoi(&c0));
         c0 = *nmea++;
-    } else return;
+    } else
+        return;
 
     /* mm */
     uint8_t m = 0;
     if (is_digit_0_to_5(c0)) {
         m += (atoi(&c0)) * 10;
         c0 = *nmea++;
-    } else return;
+    } else
+        return;
     if (is_digit_0_to_9(c0)) {
         m += (atoi(&c0));
         c0 = *nmea++;
-    } else return;
+    } else
+        return;
 
     /* ss */
     uint8_t s = 0;
     if (is_digit_0_to_5(c0)) {
         s += (atoi(&c0)) * 10;
         c0 = *nmea++;
-    } else return;
+    } else
+        return;
     if (is_digit_0_to_9(c0)) {
         s += (atoi(&c0));
         c0 = *nmea++;
-    } else return;
+    } else
+        return;
 
     /* time.h doesn't allow fractional seconds, and most GPS receivers set it to 0 anyway */
 
@@ -315,8 +303,7 @@ static void parse_time(struct tm *gps_time, const char *nmea) {
     gps_time->tm_isdst = 0;
 }
 #else
-static void parse_time(char *destination, const char *nmea)
-{
+static void parse_time(char *destination, const char *nmea) {
     char c0 = *nmea++;
 
     /* ISO8601 : YYYY-MM-DDTHH:MM:SS.SSSZ
@@ -325,84 +312,62 @@ static void parse_time(char *destination, const char *nmea)
      */
 
     /* ([0-2][0-9]) */
-    if (is_digit_0_to_2(c0))
-    {
+    if (is_digit_0_to_2(c0)) {
         destination[11] = c0; /* H */
         c0 = *nmea++;
-    }
-    else
-    {
+    } else {
         return;
     }
 
-    if (is_digit_0_to_9(c0))
-    {
+    if (is_digit_0_to_9(c0)) {
         destination[12] = c0; /* H */
         c0 = *nmea++;
-    }
-    else
-    {
+    } else {
         return;
     }
 
     /* ([0-5][0-9]) */
-    if (is_digit_0_to_5(c0))
-    {
+    if (is_digit_0_to_5(c0)) {
         destination[14] = c0; /* M */
         c0 = *nmea++;
-    }
-    else
-    {
+    } else {
         return;
     }
 
-    if (is_digit_0_to_9(c0))
-    {
+    if (is_digit_0_to_9(c0)) {
         destination[15] = c0; /* M */
         c0 = *nmea++;
-    }
-    else
-    {
+    } else {
         return;
     }
 
     /* ([0-5][0-9]) */
-    if (is_digit_0_to_5(c0))
-    {
+    if (is_digit_0_to_5(c0)) {
         destination[17] = c0; /* S */
         c0 = *nmea++;
-    }
-    else
-    {
+    } else {
         return;
     }
 
-    if (is_digit_0_to_9(c0))
-    {
+    if (is_digit_0_to_9(c0)) {
         destination[18] = c0; /* S */
         c0 = *nmea++;
-    }
-    else
-    {
+    } else {
         return;
     }
 
     /* (\.[0-9]{1,3})? */
-    if ('.' == c0)
-    {
+    if ('.' == c0) {
         uint_fast8_t i;
 
         /* Advance the destination pointer past the decimal point */
         destination += 20;
         c0 = *nmea++;
-        for (i = 0; is_digit_0_to_9(c0) && (i < 3); ++i)
-        {
+        for (i = 0; is_digit_0_to_9(c0) && (i < 3); ++i) {
             destination[i] = c0;
             c0 = *nmea++;
         }
-    }
-    else
-    {
+    } else {
         destination[20] = '0';
         destination[21] = '0';
         destination[22] = '0';
@@ -423,22 +388,26 @@ static void parse_date(struct tm *gps_date, const char *nmea) {
     if (is_digit_0_to_3(c0)) {
         d += (atoi(&c0)) * 10;
         c0 = *nmea++;
-    } else return;
+    } else
+        return;
     if (is_digit_0_to_9(c0)) {
         d += (atoi(&c0));
         c0 = *nmea++;
-    } else return;
+    } else
+        return;
 
     /* mm */
     uint8_t m = 0;
     if (is_digit_0_to_1(c0)) {
         m += (atoi(&c0)) * 10;
         c0 = *nmea++;
-    } else return;
+    } else
+        return;
     if (is_digit_0_to_9(c0)) {
         m += (atoi(&c0));
         c0 = *nmea++;
-    } else return;
+    } else
+        return;
     m--; // in time.h jan = 0, feb = 1, ..., dec = 11
 
     /* yy */
@@ -446,11 +415,13 @@ static void parse_date(struct tm *gps_date, const char *nmea) {
     if (is_digit_0_to_9(c0)) {
         y += (atoi(&c0)) * 10;
         c0 = *nmea++;
-    } else return;
+    } else
+        return;
     if (is_digit_0_to_9(c0)) {
         y += (atoi(&c0));
         c0 = *nmea++;
-    } else return;
+    } else
+        return;
     y += 100; // in time.h year is number of years since 1900 - remember to change this in year 2100 (assuming this won't break in 2038)
 
     gps_date->tm_mday = d;
@@ -461,8 +432,7 @@ static void parse_date(struct tm *gps_date, const char *nmea) {
     gps_date->tm_isdst = 0;
 }
 #else
-static void parse_date(char *destination, const char *nmea)
-{
+static void parse_date(char *destination, const char *nmea) {
     char c0 = *nmea++;
 
     /* ISO8601 : YYYY-MM-DDTHH:MM:SS.SSSZ
@@ -471,65 +441,47 @@ static void parse_date(char *destination, const char *nmea)
      */
 
     /* ([0-3][0-9]) */
-    if (is_digit_0_to_3(c0))
-    {
+    if (is_digit_0_to_3(c0)) {
         destination[8] = c0; /* D */
         c0 = *nmea++;
-    }
-    else
-    {
+    } else {
         return;
     }
 
-    if (is_digit_0_to_9(c0))
-    {
+    if (is_digit_0_to_9(c0)) {
         destination[9] = c0; /* D */
         c0 = *nmea++;
-    }
-    else
-    {
+    } else {
         return;
     }
 
     /* ([0-1][0-9]) */
-    if (is_digit_0_to_1(c0))
-    {
+    if (is_digit_0_to_1(c0)) {
         destination[5] = c0; /* M */
         c0 = *nmea++;
-    }
-    else
-    {
+    } else {
         return;
     }
 
-    if (is_digit_0_to_9(c0))
-    {
+    if (is_digit_0_to_9(c0)) {
         destination[6] = c0; /* M */
         c0 = *nmea++;
-    }
-    else
-    {
+    } else {
         return;
     }
 
     /* ([0-9][0-9]) */
-    if (is_digit_0_to_9(c0))
-    {
+    if (is_digit_0_to_9(c0)) {
         destination[2] = c0; /* Y */
         c0 = *nmea++;
-    }
-    else
-    {
+    } else {
         return;
     }
 
-    if (is_digit_0_to_9(c0))
-    {
+    if (is_digit_0_to_9(c0)) {
         destination[3] = c0; /* Y */
         c0 = *nmea++;
-    }
-    else
-    {
+    } else {
         return;
     }
 
@@ -556,10 +508,12 @@ static void parse_extended_date(struct tm *gps_date, const char *day, const char
     if (is_digit_0_to_3(c0)) {
         d += (atoi(&c0)) * 10;
         c0 = *day++;
-    } else return;
+    } else
+        return;
     if (is_digit_0_to_9(c0)) {
         d += (atoi(&c0));
-    } else return;
+    } else
+        return;
 
     /* mm */
     c0 = *month++;
@@ -567,10 +521,12 @@ static void parse_extended_date(struct tm *gps_date, const char *day, const char
     if (is_digit_0_to_1(c0)) {
         m += (atoi(&c0)) * 10;
         c0 = *month++;
-    } else return;
+    } else
+        return;
     if (is_digit_0_to_9(c0)) {
         m += (atoi(&c0));
-    } else return;
+    } else
+        return;
     m--; // in time.h jan = 0, feb = 1, ..., dec = 11
 
     c0 = *year++;
@@ -578,18 +534,22 @@ static void parse_extended_date(struct tm *gps_date, const char *day, const char
     if (is_digit_0_to_9(c0)) {
         y += (atoi(&c0)) * 1000;
         c0 = *year++;
-    } else return;
+    } else
+        return;
     if (is_digit_0_to_9(c0)) {
         y += (atoi(&c0)) * 100;
         c0 = *year++;
-    } else return;
+    } else
+        return;
     if (is_digit_0_to_9(c0)) {
         y += (atoi(&c0)) * 10;
         c0 = *year++;
-    } else return;
+    } else
+        return;
     if (is_digit_0_to_9(c0)) {
         y += (atoi(&c0));
-    } else return;
+    } else
+        return;
     y -= 1900; // in time.h year is number of years since 1900 - remember to change this in year 2100 (assuming this won't break in 2038)
 
     gps_date->tm_mday = d;
@@ -600,8 +560,7 @@ static void parse_extended_date(struct tm *gps_date, const char *day, const char
     gps_date->tm_isdst = 0;
 }
 #else
-static void parse_extended_date(char *destination, const char *day, const char *month, const char *year)
-{
+static void parse_extended_date(char *destination, const char *day, const char *month, const char *year) {
     uint_fast8_t i;
     char c0;
 
@@ -613,82 +572,67 @@ static void parse_extended_date(char *destination, const char *day, const char *
 
     /* Day */
     c0 = *day++;
-    if (is_digit_0_to_3(c0))
-    {
+    if (is_digit_0_to_3(c0)) {
         destination[8] = c0;
         c0 = *day++;
-    }
-    else
-    {
+    } else {
         return;
     }
 
-    if (is_digit_0_to_9(c0))
-    {
+    if (is_digit_0_to_9(c0)) {
         destination[9] = c0;
-    }
-    else
-    {
+    } else {
         return;
     }
 
     /* Month */
     c0 = *month++;
-    if (is_digit_0_to_1(c0))
-    {
+    if (is_digit_0_to_1(c0)) {
         destination[5] = c0;
         c0 = *month++;
-    }
-    else
-    {
+    } else {
         return;
     }
 
-    if (is_digit_0_to_9(c0))
-    {
+    if (is_digit_0_to_9(c0)) {
         destination[6] = c0;
-    }
-    else
-    {
+    } else {
         return;
     }
 
     /* Year */
     c0 = *year++;
-    for (i = 0; is_digit_0_to_9(c0) && (i < 4); ++i)
-    {
+    for (i = 0; is_digit_0_to_9(c0) && (i < 4); ++i) {
         destination[i] = c0;
         c0 = *year++;
     }
 }
 #endif
 
-static int32_t parse_altitude(const char *nmea, const char unit)
-{
+static int32_t parse_altitude(const char *nmea, const char unit) {
     /* The unit should always be meters */
-    if (unit != 'M') return GPS_INVALID_VALUE;
+    if (unit != 'M')
+        return GPS_INVALID_VALUE;
 
     return parse_number(nmea);
 }
 
-static int32_t parse_track(const char *nmea, const char type)
-{
+static int32_t parse_track(const char *nmea, const char type) {
     /* Make sure the track type is true */
-    if (type != 'T') return GPS_INVALID_VALUE;
+    if (type != 'T')
+        return GPS_INVALID_VALUE;
 
     return parse_number(nmea);
 }
 
-static int32_t parse_speed(const char *nmea, const char unit)
-{
+static int32_t parse_speed(const char *nmea, const char unit) {
     int32_t speed;
 
     /* Process speed differently based on the unit. In all cases, we are
      * converting from some unit to the SI unit of meters per second.
      * K = Kilometers per hour, N = Knots
      */
-    switch (unit)
-    {
+    switch (unit) {
     case 'K':
         speed = parse_number(nmea);
         return (speed * 10) / 36;
@@ -702,114 +646,106 @@ static int32_t parse_speed(const char *nmea, const char unit)
     return GPS_INVALID_VALUE;
 }
 
-static enum gps_mode parse_mode(const char mode)
-{
-    switch (mode)
-    {
-    case '1': return GPS_MODE_NO_FIX;
-    case '2': return GPS_MODE_2D_FIX;
-    case '3': return GPS_MODE_3D_FIX;
-    default: break;
+static enum gps_mode parse_mode(const char mode) {
+    switch (mode) {
+    case '1':
+        return GPS_MODE_NO_FIX;
+    case '2':
+        return GPS_MODE_2D_FIX;
+    case '3':
+        return GPS_MODE_3D_FIX;
+    default:
+        break;
     }
 
     return GPS_MODE_UNKNOWN;
 }
 
-static bool is_status_valid(const char status)
-{
-    if ('A' == status) return true;
+static bool is_status_valid(const char status) {
+    if ('A' == status)
+        return true;
     return false;
 }
 
-static void parse_gga(struct gps_tpv *tpv, const char **token)
-{
-    #ifdef LIBGPS_USE_TIME_H
-        parse_time(&tpv->time, token[0]);
-    #else
-        parse_time(tpv->time, token[0]);
-    #endif
+static void parse_gga(struct gps_tpv *tpv, const char **token) {
+#ifdef LIBGPS_USE_TIME_H
+    parse_time(&tpv->time, token[0]);
+#else
+    parse_time(tpv->time, token[0]);
+#endif
     tpv->latitude = parse_angular_distance(token[1], token[2][0]);
     tpv->longitude = parse_angular_distance(token[3], token[4][0]);
     tpv->altitude = parse_altitude(token[8], token[9][0]);
 }
 
-static void parse_gll(struct gps_tpv *tpv, const char **token)
-{
-    if (is_status_valid(token[5][0]))
-    {
+static void parse_gll(struct gps_tpv *tpv, const char **token) {
+    if (is_status_valid(token[5][0])) {
         tpv->latitude = parse_angular_distance(token[0], token[1][0]);
         tpv->longitude = parse_angular_distance(token[2], token[3][0]);
-        #ifdef LIBGPS_USE_TIME_H
-            parse_time(&tpv->time, token[4]);
-        #else
-            parse_time(tpv->time, token[4]);
-        #endif
+#ifdef LIBGPS_USE_TIME_H
+        parse_time(&tpv->time, token[4]);
+#else
+        parse_time(tpv->time, token[4]);
+#endif
     }
 }
 
-static void parse_gsa(struct gps_tpv *tpv, const char **token)
-{
+static void parse_gsa(struct gps_tpv *tpv, const char **token) {
     tpv->mode = parse_mode(token[1][0]);
 }
 
-static void parse_rmc(struct gps_tpv *tpv, const char **token)
-{
-    if (is_status_valid(token[1][0]))
-    {
-        #ifdef LIBGPS_USE_TIME_H
-            parse_time(&tpv->time, token[0]);
-        #else
-            parse_time(tpv->time, token[0]);
-        #endif
+static void parse_rmc(struct gps_tpv *tpv, const char **token) {
+    if (is_status_valid(token[1][0])) {
+#ifdef LIBGPS_USE_TIME_H
+        parse_time(&tpv->time, token[0]);
+#else
+        parse_time(tpv->time, token[0]);
+#endif
         tpv->latitude = parse_angular_distance(token[2], token[3][0]);
         tpv->longitude = parse_angular_distance(token[4], token[5][0]);
         tpv->track = parse_track(token[7], 'T');
         tpv->speed = parse_speed(token[6], 'N');
-        #ifdef LIBGPS_USE_TIME_H
-            parse_date(&tpv->time, token[8]);
-        #else
-            parse_date(tpv->time, token[8]);
-        #endif
+#ifdef LIBGPS_USE_TIME_H
+        parse_date(&tpv->time, token[8]);
+#else
+        parse_date(tpv->time, token[8]);
+#endif
     }
 }
 
-static void parse_vtg(struct gps_tpv *tpv, const char **token)
-{
+static void parse_vtg(struct gps_tpv *tpv, const char **token) {
     tpv->track = parse_track(token[0], token[1][0]);
     tpv->speed = parse_speed(token[6], token[7][0]);
 }
 
-static void parse_zda(struct gps_tpv *tpv, const char **token)
-{
-    #ifdef LIBGPS_USE_TIME_H
-        parse_time(&tpv->time, token[0]);
-        parse_extended_date(&tpv->time, token[1], token[2], token[3]);
-    #else
-        parse_time(tpv->time, token[0]);
-        parse_extended_date(tpv->time, token[1], token[2], token[3]);
-    #endif
+static void parse_zda(struct gps_tpv *tpv, const char **token) {
+#ifdef LIBGPS_USE_TIME_H
+    parse_time(&tpv->time, token[0]);
+    parse_extended_date(&tpv->time, token[1], token[2], token[3]);
+#else
+    parse_time(tpv->time, token[0]);
+    parse_extended_date(tpv->time, token[1], token[2], token[3]);
+#endif
 }
 
-void gps_init_tpv(struct gps_tpv *tpv)
-{
+void gps_init_tpv(struct gps_tpv *tpv) {
     assert(tpv != NULL);
 
-    tpv->mode      = GPS_MODE_UNKNOWN;
-    tpv->altitude  = GPS_INVALID_VALUE;
-    tpv->latitude  = GPS_INVALID_VALUE;
+    tpv->mode = GPS_MODE_UNKNOWN;
+    tpv->altitude = GPS_INVALID_VALUE;
+    tpv->latitude = GPS_INVALID_VALUE;
     tpv->longitude = GPS_INVALID_VALUE;
-    tpv->track     = GPS_INVALID_VALUE;
-    tpv->speed     = GPS_INVALID_VALUE;
-    #ifdef LIBGPS_USE_TIME_H
-    tpv->time = *gmtime(&NULL_TIME);
-    #else
+    tpv->track = GPS_INVALID_VALUE;
+    tpv->speed = GPS_INVALID_VALUE;
+#ifdef LIBGPS_USE_TIME_H
+    tpv->time = NULL_TIME;
+#else
     strcpy(tpv->time, NULL_TIME);
-    #endif
+#endif
     memset(tpv->talker_id, '\0', GPS_TALKER_ID_SIZE);
 }
 
-char *gps_encode(char *destination, const char *message)
-{
+char *gps_encode(char *destination, const char *message) {
     assert(destination != NULL);
     assert(message != NULL);
 
@@ -820,8 +756,7 @@ char *gps_encode(char *destination, const char *message)
     *destination++ = '$';
 
     /* Add and compute the checksum for all of the message contents */
-    while (c0)
-    {
+    while (c0) {
         checksum ^= c0;
         *destination++ = c0;
         c0 = *message++;
@@ -832,7 +767,7 @@ char *gps_encode(char *destination, const char *message)
 
     /* Add the checksum characters */
     *destination++ = uint8_to_hex_char((checksum & 0xF0) >> 4);
-    *destination++ = uint8_to_hex_char( checksum & 0x0F);
+    *destination++ = uint8_to_hex_char(checksum & 0x0F);
 
     /* Add the footer characters */
     *destination++ = '\r';
@@ -844,8 +779,7 @@ char *gps_encode(char *destination, const char *message)
     return destination;
 }
 
-int gps_decode(struct gps_tpv *tpv, char *nmea)
-{
+int gps_decode(struct gps_tpv *tpv, char *nmea) {
     assert(tpv != NULL);
     assert(nmea != NULL);
 
@@ -857,12 +791,14 @@ int gps_decode(struct gps_tpv *tpv, char *nmea)
     char c1;
 
     /* Check if the first character is the header */
-    if (c0 != '$') return GPS_ERROR_HEAD;
+    if (c0 != '$')
+        return GPS_ERROR_HEAD;
     c0 = *nmea++;
 
     /* Store the talker ID */
     c1 = *nmea++;
-    if (!c0 || !c1) return GPS_ERROR_TRUNCATED;
+    if (!c0 || !c1)
+        return GPS_ERROR_TRUNCATED;
     tpv->talker_id[0] = c0;
     tpv->talker_id[1] = c1;
 
@@ -899,12 +835,11 @@ int gps_decode(struct gps_tpv *tpv, char *nmea)
      * works because the sentence ID is the first string processed and we do
      * not need to store it as a token.
      */
-    while (c0 != '*')
-    {
-        if (!c0) return GPS_ERROR_TRUNCATED;
+    while (c0 != '*') {
+        if (!c0)
+            return GPS_ERROR_TRUNCATED;
         checksum ^= c0;
-        if (',' == c0)
-        {
+        if (',' == c0) {
             *nmea = '\0';
             token[i++] = nmea + 1;
         }
@@ -920,12 +855,14 @@ int gps_decode(struct gps_tpv *tpv, char *nmea)
 
     /* Validate the checksum */
     c1 = *nmea++;
-    if (checksum != build_hex_byte(c0, c1)) return GPS_ERROR_CHECKSUM;
+    if (checksum != build_hex_byte(c0, c1))
+        return GPS_ERROR_CHECKSUM;
     c0 = *nmea++;
 
     /* Check for the message footer */
     c1 = *nmea++;
-    if ((c0 != '\r') || (c1 != '\n')) return GPS_ERROR_FOOT;
+    if ((c0 != '\r') || (c1 != '\n'))
+        return GPS_ERROR_FOOT;
 
     /* Parse the NMEA sentence tokens */
     parse(tpv, (const char **)token);
@@ -933,17 +870,16 @@ int gps_decode(struct gps_tpv *tpv, char *nmea)
     return GPS_OK;
 }
 
-const char *gps_error_string(const int e)
-{
+const char *gps_error_string(const int e) {
     static const char *msg[] = {
         "No error while parsing NMEA",
         "Header '$' missing",
         "Footer CRLF missing",
         "Checksum did not match",
         "Sentence truncated",
-        "Unsupported NMEA sentence"
-    };
+        "Unsupported NMEA sentence"};
 
-    if ((0 <= e) && (e < ((int)(sizeof(msg) / sizeof(msg[0]))))) return msg[e];
+    if ((0 <= e) && (e < ((int)(sizeof(msg) / sizeof(msg[0])))))
+        return msg[e];
     return "Unknown error";
 }
